@@ -28,26 +28,32 @@ jobs:
         id: audit
         env:
           CANONICAL_ADDR: ${{ secrets.TREASURY_CANONICAL_ADDR }}
-        run: node scripts/audit.js > audit-report.json 2>&1 || true
+        run: |
+          node scripts/audit.js
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Debug - list files
+        run: ls -la
 
       - name: Upload report artifact
+        if: hashFiles('audit-report.json') != ''
         uses: actions/upload-artifact@v4
         with:
           name: treasury-audit-${{ github.run_id }}
           path: audit-report.json
 
       - name: Check for mismatches
-        id: check
         run: |
           if [ ! -f audit-report.json ]; then
-            echo "mismatches=0" >> $GITHUB_OUTPUT
-            exit 0
+            echo "ERROR: audit-report.json was not created. Check the Run audit step logs."
+            exit 1
           fi
           MISMATCHES=$(node -e "
             const r = JSON.parse(require('fs').readFileSync('audit-report.json','utf8'));
             console.log(r.summary ? r.summary.mismatches : 0);
           ")
-          echo "mismatches=$MISMATCHES" >> $GITHUB_OUTPUT
+          echo "Mismatches found: $MISMATCHES"
           if [ "$MISMATCHES" -gt "0" ]; then
             echo "::error::Found $MISMATCHES treasury address mismatch(es)!"
             exit 1
@@ -59,11 +65,16 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            if (!fs.existsSync('audit-report.json')) {
+              console.log('No audit-report.json found, skipping issue creation');
+              return;
+            }
             const report = JSON.parse(fs.readFileSync('audit-report.json', 'utf8'));
             const rows = report.results
               .filter(r => r.status === 'mismatch')
               .map(r => `| ${r.subdomain} | ${r.foundAddress} | ✗ MISMATCH |`)
               .join('\n');
+            if (!rows) return;
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
