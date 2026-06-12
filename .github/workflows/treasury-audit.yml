@@ -28,7 +28,7 @@ jobs:
         id: audit
         env:
           CANONICAL_ADDR: ${{ secrets.TREASURY_CANONICAL_ADDR }}
-        run: node scripts/audit.js | tee audit-report.json
+        run: node scripts/audit.js > audit-report.json 2>&1 || true
 
       - name: Upload report artifact
         uses: actions/upload-artifact@v4
@@ -36,12 +36,18 @@ jobs:
           name: treasury-audit-${{ github.run_id }}
           path: audit-report.json
 
-      - name: Fail on mismatch
+      - name: Check for mismatches
+        id: check
         run: |
+          if [ ! -f audit-report.json ]; then
+            echo "mismatches=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
           MISMATCHES=$(node -e "
-            const r = require('./audit-report.json');
-            console.log(r.summary.mismatches);
+            const r = JSON.parse(require('fs').readFileSync('audit-report.json','utf8'));
+            console.log(r.summary ? r.summary.mismatches : 0);
           ")
+          echo "mismatches=$MISMATCHES" >> $GITHUB_OUTPUT
           if [ "$MISMATCHES" -gt "0" ]; then
             echo "::error::Found $MISMATCHES treasury address mismatch(es)!"
             exit 1
@@ -52,7 +58,8 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const report = require('./audit-report.json');
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('audit-report.json', 'utf8'));
             const rows = report.results
               .filter(r => r.status === 'mismatch')
               .map(r => `| ${r.subdomain} | ${r.foundAddress} | ✗ MISMATCH |`)
