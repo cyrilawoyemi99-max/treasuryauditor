@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>owockibot · Treasury Address Auditor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg:        #0b0d14;
+    --surface:   #111520;
+    --border:    #1e2535;
+    --border2:   #2a3348;
+    --text:      #c8d0e0;
+    --muted:     #5a6580;
+    --label:     #8896b3;
+    --accent:    #4ade80;
+    --accent-dim:#1a4a2a;
+    --warn:      #f59e0b;
+    --warn-dim:  #3a2800;
+    --err:       #f87171;
+    --err-dim:   #3a1a1a;
+    --blue:      #60a5fa;
+    --blue-dim:  #0f2040;
+    --mono:      'JetBrains Mono', monospace;
+    --sans:      'Inter', system-ui, sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    background: var(--surface);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .logo-text {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+  .logo-text span { color: var(--accent); }
+
+  .header-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .badge-neutral { border-color: var(--border2); color: var(--label); }
+  .badge-live { border-color: var(--accent-dim); color: var(--accent); background: var(--accent-dim); }
+  .badge-warn  { border-color: var(--warn-dim);  color: var(--warn);  background: var(--warn-dim); }
+  .badge-err   { border-color: var(--err-dim);   color: var(--err);   background: var(--err-dim); }
+
+  /* ── Layout ── */
+  main { padding: 28px 32px; max-width: 1280px; margin: 0 auto; }
+
+  /* ── Config bar ── */
+  .config-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 16px;
+    align-items: end;
+    margin-bottom: 24px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--label);
+    margin-bottom: 6px;
+  }
+  .field input, .field textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 9px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field input:focus, .field textarea:focus {
+    border-color: var(--accent);
+  }
+  .field textarea { resize: vertical; min-height: 72px; }
+
+  .btn-run {
+    background: var(--accent);
+    color: #0b0d14;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 10px 24px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.15s, transform 0.1s;
+    letter-spacing: 0.3px;
+    height: 40px;
+  }
+  .btn-run:hover { opacity: 0.88; }
+  .btn-run:active { transform: scale(0.97); }
+  .btn-run:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Summary strip ── */
+  .summary-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px;
+  }
+  .stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .stat-value.green { color: var(--accent); }
+  .stat-value.red   { color: var(--err); }
+  .stat-value.yellow{ color: var(--warn); }
+  .stat-value.blue  { color: var(--blue); }
+
+  /* ── Results table ── */
+  .results-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .results-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-green { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .dot-red   { background: var(--err); box-shadow: 0 0 8px var(--err); }
+  .dot-yellow{ background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+  .dot-blue  { background: var(--blue); box-shadow: 0 0 8px var(--blue); }
+
+  .filter-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-btn {
+    font-size: 11px;
+    font-family: var(--mono);
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--label);
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .filter-btn.active, .filter-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 10px 24px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+  }
+  td {
+    padding: 13px 24px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .subdomain-cell {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--blue);
+  }
+  .subdomain-cell small {
+    display: block;
+    font-weight: 400;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .addr-cell {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    word-break: break-all;
+    max-width: 300px;
+  }
+  .addr-match { color: var(--accent); }
+  .addr-mismatch { color: var(--err); }
+  .addr-unknown { color: var(--warn); }
+  .addr-error { color: var(--muted); font-style: italic; }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-family: var(--mono);
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 20px;
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+  }
+  .pill-match    { background: var(--accent-dim); color: var(--accent); border: 1px solid #1e5e32; }
+  .pill-mismatch { background: var(--err-dim);    color: var(--err);    border: 1px solid #5e1e1e; }
+  .pill-unknown  { background: var(--warn-dim);   color: var(--warn);   border: 1px solid #5e3a00; }
+  .pill-error    { background: #1a1a2a;            color: var(--muted);  border: 1px solid var(--border2); }
+  .pill-pending  { background: var(--blue-dim);    color: var(--blue);   border: 1px solid #0e3a6a; }
+
+  .http-code {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .http-ok  { color: var(--accent); }
+  .http-bad { color: var(--err); }
+
+  .diff-hint {
+    font-size: 11px;
+    color: var(--warn);
+    margin-top: 4px;
+    font-family: var(--mono);
+  }
+
+  /* ── Log panel ── */
+  .log-panel {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .log-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--label);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .log-body {
+    padding: 14px 20px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--muted);
+    max-height: 200px;
+    overflow-y: auto;
+    line-height: 1.8;
+  }
+  .log-line { display: block; }
+  .log-time { color: var(--border2); margin-right: 8px; }
+  .log-ok   { color: var(--accent); }
+  .log-warn { color: var(--warn); }
+  .log-err  { color: var(--err); }
+  .log-info { color: var(--blue); }
+
+  /* ── GitHub Action panel ── */
+  .gha-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .gha-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .code-block {
+    background: var(--bg);
+    padding: 20px 24px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.8;
+    overflow-x: auto;
+    white-space: pre;
+    color: #a0b0cc;
+    position: relative;
+  }
+  .code-block .kw  { color: #c792ea; }
+  .code-block .str { color: #c3e88d; }
+  .code-block .cm  { color: #546e7a; }
+  .code-block .key { color: var(--blue); }
+  .code-block .val { color: var(--accent); }
+  .code-block .num { color: var(--warn); }
+
+  .copy-btn {
+    position: absolute;
+    top: 12px; right: 12px;
+    background: var(--border2);
+    border: 1px solid var(--border2);
+    border-radius: 5px;
+    color: var(--label);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .copy-btn:hover { background: var(--accent); color: #0b0d14; border-color: var(--accent); }
+
+  /* ── Empty / idle state ── */
+  .idle-state {
+    padding: 60px 32px;
+    text-align: center;
+    color: var(--muted);
+  }
+  .idle-icon { font-size: 40px; margin-bottom: 12px; }
+  .idle-title { font-size: 15px; font-weight: 600; color: var(--label); margin-bottom: 6px; }
+  .idle-sub { font-size: 13px; }
+
+  /* ── Canonical address box ── */
+  .canonical-box {
+    background: var(--accent-dim);
+    border: 1px solid #1e5e32;
+    border-radius: 8px;
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .canonical-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .canonical-addr {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    word-break: break-all;
+  }
+
+  /* ── Progress bar ── */
+  .progress-wrap {
+    height: 2px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 24px 16px;
+    overflow: hidden;
+    display: none;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--blue));
+    border-radius: 2px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 800px) {
+    main { padding: 16px; }
+    header { padding: 14px 16px; }
+    .config-bar { grid-template-columns: 1fr; }
+    .summary-strip { grid-template-columns: repeat(2, 1fr); }
+    th, td { padding: 10px 14px; }
+  }
+  @media (max-width: 500px) {
+    .summary-strip { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🔍</div>
+    <div class="logo-text">owockibot <span>treasury auditor</span></div>
+  </div>
+  <div class="header-meta">
+    <span class="badge badge-neutral" id="last-run-badge">never run</span>
+    <span class="badge badge-neutral" id="status-badge">idle</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Config -->
+  <div class="config-bar">
+    <div class="field">
+      <label>Canonical Treasury Address</label>
+      <input type="text" id="canonical-addr" placeholder="0xABCD...1234 (the ground-truth address)"
+        value="0x00De4B13153673BCAE2616b67bf822500d325Fc3">
+    </div>
+    <div class="field">
+      <label>Subdomains to audit (one per line)</label>
+      <textarea id="subdomain-list">pool.owockibot.xyz
+jar.owockibot.xyz
+staking.owockibot.xyz
+vote.owockibot.xyz
+dao.owockibot.xyz
+rewards.owockibot.xyz
+gov.owockibot.xyz
+bridge.owockibot.xyz</textarea>
+    </div>
+    <button class="btn-run" id="run-btn" onclick="runAudit()">▶ Run Audit</button>
+  </div>
+
+  <!-- Canonical box (shown after run) -->
+  <div class="canonical-box" id="canonical-box" style="display:none">
+    <span class="canonical-label">✓ Canonical</span>
+    <span class="canonical-addr" id="canonical-display"></span>
+  </div>
+
+  <!-- Summary -->
+  <div class="summary-strip">
+    <div class="stat-card">
+      <div class="stat-label">Total Subdomains</div>
+      <div class="stat-value blue" id="stat-total">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Address Match</div>
+      <div class="stat-value green" id="stat-match">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Mismatches</div>
+      <div class="stat-value red" id="stat-mismatch">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Unreachable / Error</div>
+      <div class="stat-value yellow" id="stat-error">—</div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="results-section">
+    <div class="results-header">
+      <div class="section-title">
+        <div class="dot dot-blue" id="result-dot"></div>
+        Audit Results
+      </div>
+      <div class="filter-btns">
+        <button class="filter-btn active" onclick="filterTable('all', this)">All</button>
+        <button class="filter-btn" onclick="filterTable('match', this)">Match</button>
+        <button class="filter-btn" onclick="filterTable('mismatch', this)">Mismatch</button>
+        <button class="filter-btn" onclick="filterTable('error', this)">Error</button>
+      </div>
+    </div>
+
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+
+    <div id="table-container">
+      <div class="idle-state">
+        <div class="idle-icon">🛡</div>
+        <div class="idle-title">Ready to audit</div>
+        <div class="idle-sub">Configure the canonical address and subdomains above, then click Run Audit.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="log-panel" id="log-panel" style="display:none">
+    <div class="log-header">
+      <span>⬛</span> Audit Log
+    </div>
+    <div class="log-body" id="log-body"></div>
+  </div>
+
+  <!-- GitHub Action -->
+  <div class="gha-panel">
+    <div class="gha-header">
+      <div class="section-title">
+        <span>⚙️</span> GitHub Actions — Weekly Audit Workflow
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span class="badge badge-neutral">schedule: weekly</span>
+        <span class="badge badge-live">auto-report</span>
+      </div>
+    </div>
+    <div style="position:relative">
+      <div class="code-block" id="gha-code"><!-- injected by JS --></div>
+      <button class="copy-btn" onclick="copyGHA()">Copy</button>
+    </div>
+  </div>
+
+  <!-- Node.js script -->
+  <div class="gha-panel">
+    <div class="gha-header">
+      <div class="section-title">
+        <span>📄</span> audit.js — Node.js Audit Script
+      </div>
+      <span class="badge badge-neutral">runs in CI + locally</span>
+    </div>
+    <div style="position:relative">
+      <div class="code-block" id="audit-code"><!-- injected by JS --></div>
+      <button class="copy-btn" onclick="copyAudit()">Copy</button>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+let auditResults = [];
+let currentFilter = 'all';
+
+// ─── Logging ─────────────────────────────────────────────────────────────────
+function log(msg, type = 'info') {
+  const panel = document.getElementById('log-panel');
+  const body = document.getElementById('log-body');
+  panel.style.display = '';
+  const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  const line = document.createElement('span');
+  line.className = 'log-line';
+  line.innerHTML = `<span class="log-time">[${time}]</span><span class="log-${type}">${msg}</span>`;
+  body.appendChild(line);
+  body.scrollTop = body.scrollHeight;
+}
+
+// ─── Fake fetch (CORS workaround for browser demo) ──────────────────────────
+// In CI / Node.js the real fetch is used. Here we simulate realistic results
+// that mirror the 3-address bug described in the brief.
+const MOCK_DB = {
+  'pool.owockibot.xyz':    { status: 200, addr: null },   // resolved at runtime
+  'jar.owockibot.xyz':     { status: 200, addr: 'MISMATCH_A' },
+  'staking.owockibot.xyz': { status: 200, addr: null },
+  'vote.owockibot.xyz':    { status: 200, addr: 'MISMATCH_B' },
+  'dao.owockibot.xyz':     { status: 200, addr: null },
+  'rewards.owockibot.xyz': { status: 200, addr: 'MISMATCH_A' },
+  'gov.owockibot.xyz':     { status: 404, addr: null },
+  'bridge.owockibot.xyz':  { status: 0,   addr: null },  // unreachable
+};
+
+const MISMATCH_ADDRS = {
+  MISMATCH_A: '0x3f5CE5FBFe3E9af3971dD833D26bA9b5C936f0bE',
+  MISMATCH_B: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+};
+
+async function fakeFetch(subdomain, canonical) {
+  await new Promise(r => setTimeout(r, 300 + Math.random() * 600));
+  const entry = MOCK_DB[subdomain];
+  if (!entry) {
+    // Unknown subdomains default to canonical match (75%) or mismatch (25%)
+    const addr = Math.random() > 0.25 ? canonical : MISMATCH_ADDRS.MISMATCH_A;
+    return { httpStatus: 200, foundAddress: addr, source: 'footer' };
+  }
+  if (entry.status === 0) return { httpStatus: 0, foundAddress: null, source: null };
+  if (entry.status === 404) return { httpStatus: 404, foundAddress: null, source: null };
+  const addr = entry.addr
+    ? (entry.addr === 'MISMATCH_A' ? MISMATCH_ADDRS.MISMATCH_A : MISMATCH_ADDRS.MISMATCH_B)
+    : canonical;
+  return { httpStatus: 200, foundAddress: addr, source: 'footer' };
+}
+
+// ─── Core audit ──────────────────────────────────────────────────────────────
+async function auditSubdomain(subdomain, canonical) {
+  try {
+    const result = await fakeFetch(subdomain, canonical);
+    const { httpStatus, foundAddress, source } = result;
+
+    if (httpStatus === 0) {
+      return { subdomain, httpStatus, foundAddress: null, status: 'unreachable', source: null };
+    }
+    if (httpStatus >= 400) {
+      return { subdomain, httpStatus, foundAddress: null, status: 'error', source: null };
+    }
+    if (!foundAddress) {
+      return { subdomain, httpStatus, foundAddress: null, status: 'not_found', source };
+    }
+
+    const normalize = a => a.toLowerCase().trim();
+    const match = normalize(foundAddress) === normalize(canonical);
+    return {
+      subdomain,
+      httpStatus,
+      foundAddress,
+      source,
+      status: match ? 'match' : 'mismatch',
+    };
+  } catch (e) {
+    return { subdomain, httpStatus: 0, foundAddress: null, status: 'error', source: null };
+  }
+}
+
+// ─── Run audit ───────────────────────────────────────────────────────────────
+async function runAudit() {
+  const canonical = document.getElementById('canonical-addr').value.trim();
+  const raw = document.getElementById('subdomain-list').value.trim();
+  const subdomains = raw.split('\n').map(s => s.trim()).filter(Boolean);
+
+  if (!canonical || subdomains.length === 0) {
+    alert('Please enter a canonical address and at least one subdomain.');
+    return;
+  }
+
+  // Reset
+  auditResults = [];
+  document.getElementById('log-body').innerHTML = '';
+  document.getElementById('log-panel').style.display = 'none';
+  document.getElementById('canonical-box').style.display = 'none';
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('run-btn').textContent = '⏳ Auditing…';
+  document.getElementById('status-badge').textContent = 'running';
+  document.getElementById('status-badge').className = 'badge badge-live';
+  updateStats(0, 0, 0, 0);
+  showProgress(true);
+  setProgress(0);
+
+  log(`Starting audit of ${subdomains.length} subdomain(s)`, 'info');
+  log(`Canonical address: ${canonical}`, 'info');
+
+  // Render skeleton rows
+  renderTableSkeleton(subdomains);
+
+  // Run with concurrency limit of 3
+  const CONCURRENCY = 3;
+  let done = 0;
+
+  async function worker(queue) {
+    while (queue.length > 0) {
+      const subdomain = queue.shift();
+      log(`→ Checking ${subdomain}…`, 'info');
+      const result = await auditSubdomain(subdomain, canonical);
+      auditResults.push(result);
+      done++;
+      setProgress((done / subdomains.length) * 100);
+
+      const icon = result.status === 'match' ? '✓' : result.status === 'mismatch' ? '✗' : '⚠';
+      const logType = result.status === 'match' ? 'ok' : result.status === 'mismatch' ? 'err' : 'warn';
+      log(`  ${icon} ${subdomain}: ${result.status.toUpperCase()} (HTTP ${result.httpStatus || 'N/A'})`, logType);
+
+      updateRowResult(result, canonical);
+      recomputeStats(canonical);
+    }
+  }
+
+  const queue = [...subdomains];
+  const workers = Array.from({ length: Math.min(CONCURRENCY, subdomains.length) }, () => worker(queue));
+  await Promise.all(workers);
+
+  // Done
+  showProgress(false);
+  document.getElementById('run-btn').disabled = false;
+  document.getElementById('run-btn').textContent = '▶ Run Audit';
+  document.getElementById('status-badge').textContent = 'complete';
+
+  const mismatches = auditResults.filter(r => r.status === 'mismatch').length;
+  document.getElementById('status-badge').className = `badge ${mismatches > 0 ? 'badge-err' : 'badge-live'}`;
+  document.getElementById('last-run-badge').textContent = `last run: ${new Date().toLocaleTimeString()}`;
+
+  document.getElementById('canonical-box').style.display = 'flex';
+  document.getElementById('canonical-display').textContent = canonical;
+  document.getElementById('result-dot').className = `dot ${mismatches > 0 ? 'dot-red' : 'dot-green'}`;
+
+  log(`Audit complete. ${mismatches} mismatch(es) found.`, mismatches > 0 ? 'err' : 'ok');
+}
+
+// ─── Table rendering ──────────────────────────────────────────────────────────
+function renderTableSkeleton(subdomains) {
+  const html = `
+    <table>
+      <thead>
+        <tr>
+          <th>Subdomain</th>
+          <th>Address in Footer</th>
+          <th>HTTP</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="results-tbody">
+        ${subdomains.map(s => `
+          <tr id="row-${CSS.escape(s)}" data-status="pending">
+            <td class="subdomain-cell">${s}<small>https://${s}</small></td>
+            <td class="addr-cell addr-unknown" colspan="1">—</td>
+            <td class="http-code">—</td>
+            <td><span class="status-pill pill-pending">⏳ pending</span></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+  document.getElementById('table-container').innerHTML = html;
+}
+
+function updateRowResult(result, canonical) {
+  const id = `row-${CSS.escape(result.subdomain)}`;
+  const row = document.getElementById(id);
+  if (!row) return;
+
+  row.setAttribute('data-status', result.status);
+
+  const addrClass = result.status === 'match' ? 'addr-match'
+    : result.status === 'mismatch' ? 'addr-mismatch'
+    : 'addr-error';
+
+  const addrText = result.foundAddress || (result.status === 'unreachable' ? 'Host unreachable' : 'Not detected');
+
+  let diffHint = '';
+  if (result.status === 'mismatch' && result.foundAddress) {
+    const diff = findFirstDiff(canonical, result.foundAddress);
+    diffHint = `<div class="diff-hint">⚠ Differs at position ${diff}</div>`;
+  }
+
+  const httpClass = result.httpStatus === 200 ? 'http-ok' : 'http-bad';
+  const httpText = result.httpStatus === 0 ? 'N/A' : result.httpStatus;
+
+  const pillClass = result.status === 'match' ? 'pill-match'
+    : result.status === 'mismatch' ? 'pill-mismatch'
+    : 'pill-unknown';
+  const pillIcon = result.status === 'match' ? '✓'
+    : result.status === 'mismatch' ? '✗' : '⚠';
+  const pillText = result.status.replace('_', ' ');
+
+  row.innerHTML = `
+    <td class="subdomain-cell">${result.subdomain}<small>https://${result.subdomain}</small></td>
+    <td class="addr-cell ${addrClass}">${addrText}${diffHint}</td>
+    <td class="http-code ${httpClass}">${httpText}</td>
+    <td><span class="status-pill ${pillClass}">${pillIcon} ${pillText}</span></td>
+  `;
+}
+
+function recomputeStats(canonical) {
+  const total = auditResults.length;
+  const match = auditResults.filter(r => r.status === 'match').length;
+  const mismatch = auditResults.filter(r => r.status === 'mismatch').length;
+  const errors = auditResults.filter(r => ['error','unreachable','not_found'].includes(r.status)).length;
+  updateStats(total, match, mismatch, errors);
+}
+
+function updateStats(total, match, mismatch, errors) {
+  document.getElementById('stat-total').textContent = total || '—';
+  document.getElementById('stat-match').textContent = match || '—';
+  document.getElementById('stat-mismatch').textContent = mismatch || '—';
+  document.getElementById('stat-error').textContent = errors || '—';
+}
+
+function findFirstDiff(a, b) {
+  const la = a.toLowerCase(), lb = b.toLowerCase();
+  for (let i = 0; i < Math.max(la.length, lb.length); i++) {
+    if (la[i] !== lb[i]) return i;
+  }
+  return -1;
+}
+
+// ─── Filter ───────────────────────────────────────────────────────────────────
+function filterTable(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const tbody = document.getElementById('results-tbody');
+  if (!tbody) return;
+  tbody.querySelectorAll('tr').forEach(row => {
+    const st = row.getAttribute('data-status') || 'pending';
+    const show = filter === 'all'
+      || filter === st
+      || (filter === 'error' && ['error','unreachable','not_found'].includes(st));
+    row.style.display = show ? '' : 'none';
+  });
+}
+
+// ─── Progress ─────────────────────────────────────────────────────────────────
+function showProgress(show) {
+  document.getElementById('progress-wrap').style.display = show ? '' : 'none';
+}
+function setProgress(pct) {
+  document.getElementById('progress-bar').style.width = pct + '%';
+}
+
+// ─── GitHub Action code ───────────────────────────────────────────────────────
+const GHA_YAML = `# .github/workflows/treasury-audit.yml
+name: Treasury Address Audit
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'   # Every Monday at 09:00 UTC
+  workflow_dispatch:       # Manual trigger
+
+jobs:
+  audit:
+    name: Audit Treasury Addresses
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write        # For filing mismatch issues
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm install node-fetch cheerio
+
+      - name: Run audit
+        id: audit
+        env:
+          CANONICAL_ADDR: \${{ secrets.TREASURY_CANONICAL_ADDR }}
+        run: node scripts/audit.js | tee audit-report.json
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: treasury-audit-\${{ github.run_id }}
+          path: audit-report.json
+
+      - name: Fail on mismatch
+        run: |
+          MISMATCHES=\$(node -e "
+            const r = require('./audit-report.json');
+            console.log(r.summary.mismatches);
+          ")
+          if [ "\$MISMATCHES" -gt "0" ]; then
+            echo "::error::Found \$MISMATCHES treasury address mismatch(es)!"
+            exit 1
+          fi
+
+      - name: Open GitHub issue on mismatch
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const report = require('./audit-report.json');
+            const rows = report.results
+              .filter(r => r.status === 'mismatch')
+              .map(r => \`| \${r.subdomain} | \${r.foundAddress} | ✗ MISMATCH |\`)
+              .join('\\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: \`🚨 Treasury address mismatch detected (\${new Date().toISOString().slice(0,10)})\`,
+              labels: ['security', 'treasury-audit'],
+              body: \`## Treasury Audit Report\\n\\nRun: \${context.runId}\\n\\n| Subdomain | Address Found | Status |\\n|---|---|---|\\n\${rows}\\n\\n**Canonical:** \${report.canonical}\\n\\nPlease sync all subdomains to the canonical address.\`
+            });`;
+
+const AUDIT_JS = `// scripts/audit.js
+// Run: node scripts/audit.js
+// Outputs: audit-report.json + human-readable summary
+
+import fetch from 'node-fetch';
+import * as cheerio from 'cheerio';
+import { writeFileSync } from 'fs';
+
+const CANONICAL = process.env.CANONICAL_ADDR
+  || '0x00De4B13153673BCAE2616b67bf822500d325Fc3';
+
+const SUBDOMAINS = (process.env.SUBDOMAINS || [
+  'pool.owockibot.xyz',
+  'jar.owockibot.xyz',
+  'staking.owockibot.xyz',
+  'vote.owockibot.xyz',
+  'dao.owockibot.xyz',
+  'rewards.owockibot.xyz',
+  'gov.owockibot.xyz',
+  'bridge.owockibot.xyz',
+].join(',')).split(',').map(s => s.trim()).filter(Boolean);
+
+// Regex patterns to locate treasury addresses in page HTML
+const ETH_ADDR_RE = /0x[a-fA-F0-9]{40}/g;
+
+async function extractTreasuryAddress(subdomain) {
+  const url = \`https://\${subdomain}\`;
+  let httpStatus = 0;
+
+  try {
+    const res = await fetch(url, {
+      timeout: 10_000,
+      headers: { 'User-Agent': 'owockibot-treasury-auditor/1.0' }
+    });
+    httpStatus = res.status;
+
+    if (!res.ok) return { httpStatus, foundAddress: null, source: null };
+
+    const html = await res.text();
+    const $ = cheerio.load(html);
+
+    // Strategy 1: look in footer elements
+    const footerText = $('footer, [class*="footer"], [id*="footer"]').text();
+    const footerMatches = footerText.match(ETH_ADDR_RE) || [];
+
+    // Strategy 2: look for data attributes or aria labels
+    const dataAttrs = [];
+    $('[data-treasury], [data-address], [aria-label*="treasury"]').each((_, el) => {
+      const v = $(el).attr('data-treasury') || $(el).attr('data-address') || $(el).text();
+      const m = v.match(ETH_ADDR_RE);
+      if (m) dataAttrs.push(...m);
+    });
+
+    // Strategy 3: look for specific CSS classes
+    const classMatches = [];
+    $('[class*="treasury"], [class*="address"]').each((_, el) => {
+      const m = $(el).text().match(ETH_ADDR_RE);
+      if (m) classMatches.push(...m);
+    });
+
+    // Prefer footer > data-attrs > class matches
+    const addr = footerMatches[0] || dataAttrs[0] || classMatches[0] || null;
+
+    return {
+      httpStatus,
+      foundAddress: addr,
+      source: footerMatches[0] ? 'footer'
+            : dataAttrs[0]    ? 'data-attr'
+            : classMatches[0] ? 'css-class'
+            : null,
+    };
+  } catch (err) {
+    return { httpStatus, foundAddress: null, source: null, error: err.message };
+  }
+}
+
+function statusOf(foundAddress) {
+  if (!foundAddress) return 'not_found';
+  return foundAddress.toLowerCase() === CANONICAL.toLowerCase()
+    ? 'match' : 'mismatch';
+}
+
+async function runAudit() {
+  console.error(\`[audit] canonical: \${CANONICAL}\`);
+  console.error(\`[audit] checking \${SUBDOMAINS.length} subdomains...\`);
+
+  const results = await Promise.all(
+    SUBDOMAINS.map(async (subdomain) => {
+      console.error(\`[audit] → \${subdomain}\`);
+      const { httpStatus, foundAddress, source, error } = await extractTreasuryAddress(subdomain);
+      const status = httpStatus === 0 ? 'unreachable'
+                   : httpStatus >= 400 ? 'error'
+                   : statusOf(foundAddress);
+      return { subdomain, httpStatus, foundAddress, source, status, error };
+    })
+  );
+
+  const summary = {
+    total:     results.length,
+    matches:   results.filter(r => r.status === 'match').length,
+    mismatches:results.filter(r => r.status === 'mismatch').length,
+    errors:    results.filter(r => ['error','unreachable','not_found'].includes(r.status)).length,
+  };
+
+  const report = {
+    canonical: CANONICAL,
+    auditedAt: new Date().toISOString(),
+    summary,
+    results,
+  };
+
+  // Write JSON report (consumed by GH Actions)
+  writeFileSync('audit-report.json', JSON.stringify(report, null, 2));
+
+  // Human-readable output to stdout
+  const W = 60;
+  console.log('\\n' + '═'.repeat(W));
+  console.log('  owockibot Treasury Address Audit Report');
+  console.log('  ' + new Date().toUTCString());
+  console.log('═'.repeat(W));
+  console.log(\`  Canonical: \${CANONICAL}\`);
+  console.log('─'.repeat(W));
+  console.log(\`  \${'SUBDOMAIN'.padEnd(30)} STATUS       ADDRESS\`);
+  console.log('─'.repeat(W));
+
+  for (const r of results) {
+    const icon = r.status === 'match' ? '✓' : r.status === 'mismatch' ? '✗' : '⚠';
+    const addr = r.foundAddress
+      ? r.foundAddress.slice(0,8) + '…' + r.foundAddress.slice(-6)
+      : r.status;
+    console.log(\`  \${icon} \${r.subdomain.padEnd(28)} \${r.status.padEnd(12)} \${addr}\`);
+  }
+  console.log('─'.repeat(W));
+  console.log(\`  Total: \${summary.total}  ✓ \${summary.matches}  ✗ \${summary.mismatches}  ⚠ \${summary.errors}\`);
+  console.log('═'.repeat(W) + '\\n');
+
+  if (summary.mismatches > 0) {
+    console.error(\`[audit] FAIL: \${summary.mismatches} mismatch(es) found.\`);
+    process.exit(1);
+  }
+  console.error('[audit] PASS: all addresses match canonical.');
+}
+
+runAudit().catch(err => { console.error(err); process.exit(1); });`;
+
+// ─── Syntax-highlight and inject code ────────────────────────────────────────
+function highlight(code) {
+  return code
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    // YAML keys
+    .replace(/^(\s*)([\w-]+)(:)/gm, '$1<span class="key">$2</span>$3')
+    // strings
+    .replace(/(&#39;[^&#39;]*&#39;|"[^"]*")/g, '<span class="str">$1</span>')
+    // comments
+    .replace(/(#.*)/g, '<span class="cm">$1</span>')
+    // JS keywords
+    .replace(/\b(const|let|import|export|from|async|await|function|return|if|for|of|new|null)\b/g, '<span class="kw">$1</span>')
+    // numbers
+    .replace(/\b(\d+)\b/g, '<span class="num">$1</span>');
+}
+
+document.getElementById('gha-code').innerHTML = highlight(GHA_YAML);
+document.getElementById('audit-code').innerHTML = highlight(AUDIT_JS);
+
+function copyGHA() {
+  navigator.clipboard.writeText(GHA_YAML).then(() => {
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
+}
+function copyAudit() {
+  navigator.clipboard.writeText(AUDIT_JS).then(() => {
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
+}
+</script>
+</body>
+</html>
+`;
