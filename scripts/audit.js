@@ -3,17 +3,34 @@ import * as cheerio from 'cheerio';
 import { writeFileSync } from 'fs';
 
 const CANONICAL = process.env.CANONICAL_ADDR
-  || '0x00De4B13153673BCAE2616b67bf822500d325Fc3';
+  || '0x26B7805Dd8aEc26DA55fc8e0c659cf6822b740Be';
 
 const SUBDOMAINS = (process.env.SUBDOMAINS || [
   'pool.owockibot.xyz',
   'jar.owockibot.xyz',
   'staking.owockibot.xyz',
   'vote.owockibot.xyz',
-  'dao.owockibot.xyz',
-  'rewards.owockibot.xyz',
-  'gov.owockibot.xyz',
-  'bridge.owockibot.xyz',
+  'qf.owockibot.xyz',
+  'rfps.owockibot.xyz',
+  'curves.owockibot.xyz',
+  'lotto.owockibot.xyz',
+  'ranked.owockibot.xyz',
+  'stream.owockibot.xyz',
+  'circles.owockibot.xyz',
+  'mutual.owockibot.xyz',
+  'grants.owockibot.xyz',
+  'dominant.owockibot.xyz',
+  'assurance.owockibot.xyz',
+  'ubi.owockibot.xyz',
+  'honour.owockibot.xyz',
+  'ephemeral.owockibot.xyz',
+  'autopgf.owockibot.xyz',
+  'ships.owockibot.xyz',
+  'attestations.owockibot.xyz',
+  'prediction.owockibot.xyz',
+  'futarchy.owockibot.xyz',
+  'registry.owockibot.xyz',
+  'stats.owockibot.xyz',
 ].join(',')).split(',').map(s => s.trim()).filter(Boolean);
 
 const ETH_ADDR_RE = /0x[a-fA-F0-9]{40}/g;
