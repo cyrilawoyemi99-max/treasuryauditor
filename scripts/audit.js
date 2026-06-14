@@ -40,31 +40,48 @@ async function extractTreasuryAddress(subdomain) {
   let httpStatus = 0;
   try {
     const res = await fetch(url, {
-      timeout: 10_000,
+      timeout: 15_000,
       headers: { 'User-Agent': 'owockibot-treasury-auditor/1.0' }
     });
     httpStatus = res.status;
     if (!res.ok) return { httpStatus, foundAddress: null, source: null };
     const html = await res.text();
     const $ = cheerio.load(html);
+
+    // Strategy 1: footer elements
     const footerText = $('footer, [class*="footer"], [id*="footer"]').text();
     const footerMatches = footerText.match(ETH_ADDR_RE) || [];
+
+    // Strategy 2: data attributes
     const dataAttrs = [];
     $('[data-treasury], [data-address], [aria-label*="treasury"]').each((_, el) => {
       const v = $(el).attr('data-treasury') || $(el).attr('data-address') || $(el).text();
       const m = v.match(ETH_ADDR_RE);
       if (m) dataAttrs.push(...m);
     });
+
+    // Strategy 3: CSS class selectors
     const classMatches = [];
     $('[class*="treasury"], [class*="address"]').each((_, el) => {
       const m = $(el).text().match(ETH_ADDR_RE);
       if (m) classMatches.push(...m);
     });
-    const addr = footerMatches[0] || dataAttrs[0] || classMatches[0] || null;
+
+    // Strategy 4: full page text (catches inline addresses like "Treasury: 0x...")
+    const fullText = $.root().text();
+    const fullMatches = (fullText.match(ETH_ADDR_RE) || [])
+      .filter(a => a.toLowerCase() !== '0xfdc933ff4e2980d18becf48e4e030d8463a2bb07'); // exclude token contract
+
+    const addr = footerMatches[0] || dataAttrs[0] || classMatches[0] || fullMatches[0] || null;
+
     return {
       httpStatus,
       foundAddress: addr,
-      source: footerMatches[0] ? 'footer' : dataAttrs[0] ? 'data-attr' : classMatches[0] ? 'css-class' : null,
+      source: footerMatches[0] ? 'footer'
+            : dataAttrs[0]    ? 'data-attr'
+            : classMatches[0] ? 'css-class'
+            : fullMatches[0]  ? 'page-text'
+            : null,
     };
   } catch (err) {
     return { httpStatus, foundAddress: null, source: null, error: err.message };
