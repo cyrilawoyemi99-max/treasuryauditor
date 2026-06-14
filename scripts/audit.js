@@ -34,6 +34,7 @@ const SUBDOMAINS = (process.env.SUBDOMAINS || [
 ].join(',')).split(',').map(s => s.trim()).filter(Boolean);
 
 const ETH_ADDR_RE = /0x[a-fA-F0-9]{40}/g;
+const TOKEN_CONTRACT = '0xfdc933ff4e2980d18becf48e4e030d8463a2bb07';
 
 async function extractTreasuryAddress(subdomain) {
   const url = `https://${subdomain}`;
@@ -41,46 +42,41 @@ async function extractTreasuryAddress(subdomain) {
   try {
     const res = await fetch(url, {
       timeout: 15_000,
-      headers: { 'User-Agent': 'owockibot-treasury-auditor/1.0' }
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; owockibot-auditor/1.0)' }
     });
     httpStatus = res.status;
     if (!res.ok) return { httpStatus, foundAddress: null, source: null };
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    // Strategy 1: footer elements
+    // Strategy 1: basescan links in footer (most reliable)
+    const basescanAddrs = [];
+    $('a[href*="basescan.org/address/"]').each((_, el) => {
+      const href = $(el).attr('href') || '';
+      const m = href.match(/address\/(0x[a-fA-F0-9]{40})/);
+      if (m && m[1].toLowerCase() !== TOKEN_CONTRACT) {
+        basescanAddrs.push(m[1]);
+      }
+    });
+
+    // Strategy 2: footer text
     const footerText = $('footer, [class*="footer"], [id*="footer"]').text();
-    const footerMatches = footerText.match(ETH_ADDR_RE) || [];
+    const footerMatches = (footerText.match(ETH_ADDR_RE) || [])
+      .filter(a => a.toLowerCase() !== TOKEN_CONTRACT);
 
-    // Strategy 2: data attributes
-    const dataAttrs = [];
-    $('[data-treasury], [data-address], [aria-label*="treasury"]').each((_, el) => {
-      const v = $(el).attr('data-treasury') || $(el).attr('data-address') || $(el).text();
-      const m = v.match(ETH_ADDR_RE);
-      if (m) dataAttrs.push(...m);
-    });
-
-    // Strategy 3: CSS class selectors
-    const classMatches = [];
-    $('[class*="treasury"], [class*="address"]').each((_, el) => {
-      const m = $(el).text().match(ETH_ADDR_RE);
-      if (m) classMatches.push(...m);
-    });
-
-    // Strategy 4: full page text (catches inline addresses like "Treasury: 0x...")
+    // Strategy 3: full page text
     const fullText = $.root().text();
     const fullMatches = (fullText.match(ETH_ADDR_RE) || [])
-      .filter(a => a.toLowerCase() !== '0xfdc933ff4e2980d18becf48e4e030d8463a2bb07'); // exclude token contract
+      .filter(a => a.toLowerCase() !== TOKEN_CONTRACT);
 
-    const addr = footerMatches[0] || dataAttrs[0] || classMatches[0] || fullMatches[0] || null;
+    const addr = basescanAddrs[0] || footerMatches[0] || fullMatches[0] || null;
 
     return {
       httpStatus,
       foundAddress: addr,
-      source: footerMatches[0] ? 'footer'
-            : dataAttrs[0]    ? 'data-attr'
-            : classMatches[0] ? 'css-class'
-            : fullMatches[0]  ? 'page-text'
+      source: basescanAddrs[0] ? 'basescan-link'
+            : footerMatches[0] ? 'footer'
+            : fullMatches[0]   ? 'page-text'
             : null,
     };
   } catch (err) {
